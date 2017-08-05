@@ -1,19 +1,25 @@
 #include <iostream>
 #include <string>
+#include <vector>
+#include <thread>
+#include <chrono>
+#include <mutex>
+#include <cassert>
 
 using namespace std;
 
 struct PersonTimer
 {
-	PersonTimer(string name)
-	:name(name)
-	{
-
-	}
+	PersonTimer(string name): name(name){}
 
 	string name;
 	bool started = false;
 	int time = 180;
+
+	void print() const
+	{
+		cout << name << "\t" << time << "\t" << (started ? "started" : "stopped") << endl;
+	}
 };
 
 class StateMachine
@@ -21,25 +27,21 @@ class StateMachine
 public:
 	StateMachine()
 	{
+		timers_.push_back(PersonTimer("Lander"));
+		timers_.push_back(PersonTimer("Tibe"));
+		timers_.push_back(PersonTimer("Tuur"));
+		timers_.push_back(PersonTimer("Siem"));
 		change_state_(State::Idle);
 	}
 	void process(int mins)
 	{
-		const int &minutes = mins;
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		minutes_ += mins;
 		switch (state_)
 		{
 			case State::Idle:
 			{
-				if (false) {}
-				else if (lander_.started == true) selected_timer_ = &lander_;
-				else if (tibe_.started == true) selected_timer_ = &tibe_;
-				else if (tuur_.started == true) selected_timer_ = &tuur_;
-				else if (siem_.started == true) selected_timer_ = &siem_;
-				else
-				{
-					std::cout << "No body is active" << std::endl;
-					return;
-				}
 				change_state_(State::UpdateStartedTimers);
 			}
 			break;
@@ -47,20 +49,26 @@ public:
 	}
 	void process(std::string str)
 	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
 		switch (state_)
 		{
 			case State::Idle:
 			{
 				const std::string &name = str;
-				if (false) {}
-				else if (name == "lander") selected_timer_ = &lander_;
-				else if (name == "tibe") selected_timer_ = &tibe_;
-				else if (name == "tuur") selected_timer_ = &tuur_;
-				else if (name == "siem") selected_timer_ = &siem_;
-				else
+				assert(selected_timer_ == nullptr);
+				for(auto &timer : timers_)
 				{
-					std::cout << "Unknown user " << name << std::endl;
-					return;
+					if (timer.name == name)
+					{
+						selected_timer_ = &timer;
+						break;
+					}
+				}
+				if (!selected_timer_)
+				{
+					std::cout << "Unknown user " << name << std::endl;		
+					break;		
 				}
 				change_state_(State::Selected);
 			}
@@ -68,35 +76,29 @@ public:
 
 			case State::Selected:
 			{
-				const std::string &command = str;
 				if (false) {}
-				else if (command == "update")
-				{
-					change_state_(State::UpdateSelectedTimer);
-				}
-				else if (command == "start")
+				else if (str == "start")
 				{
 					change_state_(State::StartTimer);
 				}
-				else if (command == "stop")
+				else if (str == "stop")
 				{
 					change_state_(State::StopTimer);
 				}
 				else
 				{
-					std::cout << "Unknown command " << command << std::endl;
-					return;
+					int mins = std::stoi(str);
+					selected_timer_->time += mins;
+					change_state_(State::Idle);
 				}
 			}
 			break;
-
 		}
-
 	}
 private:
 	enum class State
 	{
-		Init, Idle, UpdateStartedTimers, Selected, UpdateSelectedTimer, StartTimer, StopTimer 
+		Init, Idle, UpdateStartedTimers, Selected, StartTimer, StopTimer 
 	};
 
 	void change_state_(State newState)
@@ -107,6 +109,9 @@ private:
 		//exit
 		switch(state_)
 		{
+			case State::UpdateStartedTimers:
+			minutes_ = 0;
+			break;
 		}
 
 		state_ = newState;
@@ -116,72 +121,62 @@ private:
 		{
 			case State::Idle:
 			selected_timer_ = nullptr;
-			cout << lander_.name << "\t" << lander_.time << "\t" << (lander_.started ? "started" : "stopped") << endl;
-			cout << tibe_.name << "\t" << tibe_.time << "\t" << (tibe_.started ? "started" : "stopped") << endl;
+			cout << endl;
+			for (auto timer : timers_)
+				timer.print();
+			break;
+
+			case State::UpdateStartedTimers:
+			for (auto &timer : timers_)
+				if (timer.started)
+					timer.time -= minutes_;
+			change_state_(State::Idle);
 			break;
 
 			case State::Selected:
-			cout << "Selected " << selected_timer_->name << endl;
+			cout << "Selected ";
+			selected_timer_->print();
 			break;
 
 			case State::StartTimer:
 			selected_timer_->started = true;
 			change_state_(State::Idle);
 			break;
+
 			case State::StopTimer:
 			selected_timer_->started = false;
-			change_state_(State::Idle);
-			break;
-
-			case State::UpdateStartedTimers:
-			selected_timer_->time -= 1;
-			cout << selected_timer_->name << "\t" << selected_timer_->time << endl;
-			selected_timer_ = nullptr;
 			change_state_(State::Idle);
 			break;
 		}
 	}
 
+	std::mutex mutex_;
 	State state_ = State::Init;
-	PersonTimer lander_{"Lander"};
-	PersonTimer tibe_{"Tibe"};
-	PersonTimer tuur_{"Tuur"};
-	PersonTimer siem_{"Siem"};
 	PersonTimer *selected_timer_ = nullptr;
+	int minutes_ = 0;
+	std::vector<PersonTimer> timers_;
 };
 
 int main()
 {
 	StateMachine sm;
-	//Scenario Lander start met gamen
-	//* Inloggen
-	//** lander<enter>
-	//* Aanduiden start gamen
-	//** start<enter>
-	//* Uitloggen vanzelf
-	sm.process("lander");
-	sm.process("start");
-	sm.process(1);
-	sm.process(1);
-	sm.process(1);
-	sm.process(1);
-	sm.process("lander");
-	sm.process("stop");
 
-	sm.process(1);
-	sm.process(1);
+	auto clock = [&sm]()
+	{
+		for (;true;)
+		{
+			std::this_thread::sleep_for(std::chrono::minutes(1));
+			sm.process(1);
+		}
+	};
 
-	sm.process("tibe");
-	sm.process("start");
+	std::thread clock_thread(clock);
 
-	sm.process(1);
-	sm.process(1);
-	sm.process(1);
-	sm.process(1);
-	sm.process(1);
-	sm.process(1);
-
-	sm.process("tibe");
-	sm.process("stop");
+	for (;true;)
+	{
+		std::string str;
+		std::cin >> str;
+		sm.process(str);
+	}
 	return 0;
 }
