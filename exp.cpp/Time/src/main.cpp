@@ -3,6 +3,8 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <ctime>
+#include <iomanip>
 #include <mutex>
 #include <cassert>
 
@@ -47,6 +49,14 @@ public:
 			break;
 		}
 	}
+	void reset()
+	{
+		for(auto &timer : timers_)
+		{
+			timer.time = 180;
+			timer.started = false;
+		}
+	} 
 	void process(std::string str)
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
@@ -163,10 +173,21 @@ int main()
 
 	auto clock = [&sm]()
 	{
+		auto now = std::chrono::system_clock::now();;
+		auto now_c = std::chrono::system_clock::to_time_t(now);
+		auto m_since_1970 = now_c / 60;
+		auto u_since_1970 = m_since_1970 / 60;
+		auto d_since_1970 = u_since_1970 / 24;
+		auto previous = d_since_1970;
 		for (;true;)
 		{
 			std::this_thread::sleep_for(std::chrono::minutes(1));
 			sm.process(1);
+			if (d_since_1970 != previous)
+			{
+				sm.reset();
+				previous = d_since_1970;
+			}
 		}
 	};
 
