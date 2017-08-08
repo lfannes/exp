@@ -35,10 +35,25 @@ public:
 		timers_.push_back(PersonTimer("Siem"));
 		change_state_(State::Idle);
 	}
+	void controleDay(auto &now_c, auto &now)
+	{
+		days = now_c / 86400;
+		if (x == 1)
+		{
+			previous = days;
+			cout << previous << " " << days;
+			x--;
+		}
+
+		if (previous != days)
+		{
+			reset();
+			previous = days;
+		}
+	}
 	void process(int mins)
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
-
 		minutes_ += mins;
 		switch (state_)
 		{
@@ -53,6 +68,7 @@ public:
 	{
 		for(auto &timer : timers_)
 		{
+			cout << timer.name << ": reset" << endl;
 			timer.time = 180;
 			timer.started = false;
 		}
@@ -60,7 +76,6 @@ public:
 	void process(std::string str)
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
-
 		switch (state_)
 		{
 			case State::Idle:
@@ -108,7 +123,7 @@ public:
 private:
 	enum class State
 	{
-		Init, Idle, UpdateStartedTimers, Selected, StartTimer, StopTimer 
+		Init, Idle, UpdateStartedTimers, Selected, StartTimer, StopTimer
 	};
 
 	void change_state_(State newState)
@@ -165,29 +180,25 @@ private:
 	PersonTimer *selected_timer_ = nullptr;
 	int minutes_ = 0;
 	std::vector<PersonTimer> timers_;
+	int previous;
+	int x = 1;
+	int days;
+	int y = 5;
 };
 
 int main()
 {
 	StateMachine sm;
 
-	auto clock = [&sm]()
+	auto clock = [&]()
 	{
-		auto now = std::chrono::system_clock::now();;
-		auto now_c = std::chrono::system_clock::to_time_t(now);
-		auto m_since_1970 = now_c / 60;
-		auto u_since_1970 = m_since_1970 / 60;
-		auto d_since_1970 = u_since_1970 / 24;
-		auto previous = d_since_1970;
 		for (;true;)
 		{
-			std::this_thread::sleep_for(std::chrono::minutes(1));
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+			std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+			std::time_t now_c = std::chrono::system_clock::to_time_t(now);
 			sm.process(1);
-			if (d_since_1970 != previous)
-			{
-				sm.reset();
-				previous = d_since_1970;
-			}
+			sm.controleDay(now_c, now);
 		}
 	};
 
