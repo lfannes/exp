@@ -1,0 +1,28 @@
+compiler = g++ -std=c++17
+linker = g++ -std=c++17
+delete = rm -f
+
+cflags = -m64
+defines = -DNDEBUG
+include_paths = -I "$$gubg/include" -I "./"
+lflags = -m64
+library_paths = -L"$$gubg/lib"
+libraries = -lsfml-window -lsfml-graphics -lsfml-audio -lsfml-network -lsfml-system -lxcb -lxcb-randr -lxcb-image -ludev -ljpeg -lGL -lGLU -lX11 -lX11-xcb -lXrandr -lpthread -lopenal -lfreetype -lFLAC -logg -lvorbis -lvorbisfile -lvorbisenc
+rule compile
+  command = $compiler -c -MD -MF $out.d $cflags $defines -o $out $in $include_paths
+  depfile = $out.d
+rule link
+  command = $linker $lflags -o $out $in $library_paths $libraries
+
+build .cook/sfml#exe/x64/release/./game.cpp.obj: compile ./game.cpp
+build .cook/sfml#exe/x64/release/./main.cpp.obj: compile ./main.cpp
+build .cook/sfml#exe/x64/release/./menu.cpp.obj: compile ./menu.cpp
+build sfml.exe: link $
+    .cook/sfml#exe/x64/release/./game.cpp.obj $
+    .cook/sfml#exe/x64/release/./main.cpp.obj $
+    .cook/sfml#exe/x64/release/./menu.cpp.obj
+
+rule clean
+  command = ninja -t clean
+build clean: clean
+default sfml.exe
