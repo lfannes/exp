@@ -16,11 +16,13 @@ struct PersonTimer
 
 	string name;
 	bool started = false;
-	int time = 180;
+	int time = 240;
 
 	void print() const
 	{
-		cout << name << "\t" << time << "\t" << (started ? "started" : "stopped") << endl;
+		int h = time/60;
+		int m = time%60;
+		cout << "Titanfall 2\n" << name << "\t" << "uren: " << h << "  minuten: " << m << "\t" << (started ? "\033[1m\033[32mstarted\033[0m" : "\033[1m\033[31mstopped\033[0m") << endl;
 	}
 };
 
@@ -41,7 +43,6 @@ public:
 		if (x == 1)
 		{
 			previous = days;
-			cout << previous << " " << days;
 			x--;
 		}
 
@@ -92,7 +93,11 @@ public:
 				}
 				if (!selected_timer_)
 				{
-					std::cout << "Unknown user " << name << std::endl;		
+					std::cout << "\033[31mUnknown user " << name << "\033[0m" << std::endl;	
+					for(auto timer : timers_)
+					{
+						timer.print();
+					}	
 					break;		
 				}
 				change_state_(State::Selected);
@@ -110,11 +115,26 @@ public:
 				{
 					change_state_(State::StopTimer);
 				}
+				else if (str == "time")
+				{
+					cout << selected_timer_->name << ": " << 240 - selected_timer_->time << endl;
+				}
 				else
 				{
-					int mins = std::stoi(str);
-					selected_timer_->time += mins;
-					change_state_(State::Idle);
+					const char *begin = str.c_str();
+					const char *end = begin+str.size();
+					char *tot_hier_ok;
+					long mins = std::strtol(begin, &tot_hier_ok, 10);
+					if (tot_hier_ok != end)
+					{
+						cout << "\033[31m" << selected_timer_->name << ": " << str << " niet uitvoerbaar\033[0m" << endl;
+						change_state_(State::Idle);
+					}
+					else
+					{
+						selected_timer_->time += mins;
+						change_state_(State::Idle);						
+					}
 				}
 			}
 			break;
@@ -183,7 +203,6 @@ private:
 	int previous;
 	int x = 1;
 	int days;
-	int y = 5;
 };
 
 int main()
@@ -194,7 +213,7 @@ int main()
 	{
 		for (;true;)
 		{
-			std::this_thread::sleep_for(std::chrono::seconds(1));
+			std::this_thread::sleep_for(std::chrono::minutes(1));
 			std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
 			std::time_t now_c = std::chrono::system_clock::to_time_t(now);
 			sm.process(1);
